@@ -1,0 +1,57 @@
+.custom-button {
+    background-color: #4CAF50;
+    /* Yeşil */
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 5px;
+    /* Yuvarlak köşeler */
+    transition: background-color 0.3s ease;
+    /* Hover animasyonu */
+}
+
+.custom-button:hover {
+    background-color: #45a049;
+    /* Hover'da daha koyu bir yeşil */
+}
+
+
+.custom-slider {
+    -webkit-appearance: none;
+    width: 300px;
+    height: 8px;
+    background: #ddd;
+    border-radius: 5px;
+    outline: none;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+}
+
+.custom-slider:hover {
+    opacity: 1;
+}
+
+.custom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.custom-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+}
+

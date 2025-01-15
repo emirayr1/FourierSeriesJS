@@ -1,6 +1,7 @@
 let time = 0;
 let wave = [];
 let slider;
+let volumeSlider;
 let audioContext;
 let bufferSource;
 let isPlaying = false;
@@ -9,6 +10,7 @@ function setup() {
     createCanvas(800, 400);
     slider = createSlider(1, 15, 1);
 
+    volumeSlider = createSlider(1, 20, 1)
     let playButton = createButton('Ses Başlat');
     playButton.mousePressed(startSound);
 
@@ -28,7 +30,7 @@ function draw() {
         let prevy = y;
 
         let n = i * 2 + 1; // 1, 3, 5 (tek sayılar)
-        let radius = 50 * (4 / (n * PI));
+        let radius = 50 * (4 / (n * PI)); // çemberi 50x büyütmek için 
 
         x += radius * cos(n * time);  // Gerçek kısım (real)
         y += radius * sin(n * time);  // İmajiner kısım (imaginary)
@@ -72,11 +74,11 @@ function generateWaveform() {
 
     for (let i = 0; i < bufferSize; i++) {
         let t = i / sampleRate;
-        let theta = 2 * Math.PI * 440 * t;
+        let theta = 2 * Math.PI * 220 * t;
 
         for (let j = 0; j < slider.value(); j++) {
             let odd = j * 2 + 1;
-            data[i] += (odd * Math.sin(odd * theta)) / (odd * Math.PI);
+            data[i] += (odd * Math.sin(odd * theta)) / (odd * Math.PI) / volumeSlider.value();
         }
     }
 
@@ -89,7 +91,7 @@ function generateWaveform() {
 
 function startSound() {
     if (!isPlaying) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext = new (window.AudioContext || window.webkitAudioContext)(); // ???
         generateWaveform();
         isPlaying = true;
 
@@ -98,6 +100,11 @@ function startSound() {
             bufferSource.stop();  // Eski buffer'ı durdur
             generateWaveform();   // Yeni buffer ile sesi güncelle
         });
+
+        volumeSlider.input(() => {
+            bufferSource.stop();
+            generateWaveform();
+        })
     }
 }
 

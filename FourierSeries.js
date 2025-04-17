@@ -1,189 +1,166 @@
 let time = 0;
 let wave = [];
-let slider;
-let volumeSlider;
-let audioContext;
-let bufferSource;
-let gainNode;
+let slider, volumeSlider;
+let harmonicLabel, volumeLabel;
+let audioContext, bufferSource, gainNode;
 let isPlaying = false;
 
 const LUT_SIZE = 10000;
 const sinTable = new Float32Array(LUT_SIZE);
-
-// Sinüs değerlerini önceden hesapla (0 ile 2*PI arasında)
 for (let i = 0; i < LUT_SIZE; i++) {
-    sinTable[i] = Math.sin((i / LUT_SIZE) * 2 * Math.PI);
+  sinTable[i] = Math.sin((i / LUT_SIZE) * 2 * Math.PI);
 }
-
-// Sinüs fonksiyonu LUT ile hesapla
 function sinLUT(angle) {
-    angle = angle % (2 * Math.PI); // 0 ile 2*PI arasında normalize
-    if (angle < 0) angle += 2 * Math.PI;
-
-    const index = Math.floor((angle / (2 * Math.PI)) * LUT_SIZE);
-    return sinTable[index];
+  angle %= TWO_PI;
+  if (angle < 0) angle += TWO_PI;
+  const idx = Math.floor((angle / TWO_PI) * LUT_SIZE);
+  return sinTable[idx];
 }
 
 function setup() {
     createCanvas(800, 400);
     textFont('Georgia');
-
+  
+    // --- Harmonic Slider ve Label ---
     slider = createSlider(1, 15, 1);
-    volumeSlider = createSlider(0, 1, 1, 0.01); // 0'dan 1'e hassas ses ayarı
+    slider.position(600, height + 20 + 300);
     slider.addClass('custom-slider');
-    volumeSlider.addClass('custom-slider');
-
-    let playButton = createButton('Ses Başlat');
-    playButton.mousePressed(startSound);
-    playButton.addClass('custom-button');
-
-
-    let stopButton = createButton('Ses Durdur');
-    stopButton.mousePressed(stopSound);
-    stopButton.addClass('custom-button');
-
-    let harmonicLabel = createDiv('Harmonik Sayısı: 1');
+    harmonicLabel = createDiv(`Harmonic Count: ${slider.value()}`);
+    harmonicLabel.position(690, height + 50 + 300);
     harmonicLabel.style('color', '#dfeaf4');
     harmonicLabel.style('font-size', '16px');
-    harmonicLabel.position(700, 750); // Sliderın üstüne yerleştir
-
+  
+    // Harmonic slider'ı dinle
     slider.input(() => {
-        harmonicLabel.html(`Harmonik Sayısı: ${slider.value()}`);
+      harmonicLabel.html(`Harmonic Count: ${slider.value()}`);
+      if (isPlaying) {
+        // Mevcut buffer'ı durdurup, yenisini başlat
+        bufferSource.stop();
+        bufferSource = audioContext.createBufferSource();
+        bufferSource.buffer = generateWaveform();
+        bufferSource.loop = true;
+        bufferSource.connect(gainNode);
+        // Anlık volume değerini koru
+        gainNode.gain.setValueAtTime(volumeSlider.value(), audioContext.currentTime);
+        bufferSource.start();
+      }
     });
-
-
-    // Ses Düzeyi Slider
-    let volumeLabel = createDiv('Ses Düzeyi: 0dBFS');
+  
+    // --- Volume Slider ve Label ---
+    volumeSlider = createSlider(0, 1, 1, 0.01);
+    volumeSlider.position(1000, height + 20 + 300);
+    volumeSlider.addClass('custom-slider');
+    volumeLabel = createDiv(`Volume: ${valueToDbFS(volumeSlider.value())}`);
+    volumeLabel.position(1080, height + 50 + 300);
     volumeLabel.style('color', '#dfeaf4');
     volumeLabel.style('font-size', '16px');
-    volumeLabel.position(1105, 750); // Ses düzeyi slider'ın üstüne
-
-    playButton.position(1400, 750);
-    stopButton.position(1400, 800);
-
-    slider.position(600, 800)
-    volumeSlider.position(1000, 800)
-
+  
+    // Volume slider'ı dinle
     volumeSlider.input(() => {
-        const value = volumeSlider.value();
-        const dbFS = valueToDbFS(value);
-        volumeLabel.html(`Ses Düzeyi: ${dbFS}`);
+      volumeLabel.html(`Volume: ${valueToDbFS(volumeSlider.value())}`);
+      if (isPlaying) {
+        gainNode.gain.setValueAtTime(volumeSlider.value(), audioContext.currentTime);
+      }
     });
+  
+    // --- Play / Stop butonları ---
+    let playButton = createButton('Start');
+    playButton.position(1500, height + 20);
+    playButton.mousePressed(startSound).addClass('custom-button');
+  
+    let stopButton = createButton('Stop');
+    stopButton.position(1500, height + 60);
+    stopButton.mousePressed(stopSound).addClass('custom-button');
+  }
+  
+
+function onHarmonicChange() {
+  harmonicLabel.html(`Harmonik Sayısı: ${slider.value()}`);
+  if (isPlaying) updateSound();
 }
 
-function valueToDbFS(value) {
-    if (value === 0) {
-        return '-∞';
-    } else {
-        return (20 * Math.log10(value)).toFixed(2) + ' dBFS';
-    }
+function onVolumeChange() {
+  volumeLabel.html(`Ses Düzeyi: ${valueToDbFS(volumeSlider.value())}`);
+  if (isPlaying) {
+    gainNode.gain.setValueAtTime(volumeSlider.value(), audioContext.currentTime);
+  }
 }
 
 function draw() {
-    background('#1e1e2f');
+  background('#1e1e2f');
+  translate(width / 2 - 100, height / 2);
 
-    translate(width / 2 - 100, height / 2);
+  let x = 0, y = 0;
+  for (let i = 0; i < slider.value(); i++) {
+    let prevx = x, prevy = y;
+    let n = i * 2 + 1;
+    let radius = 50 * (4 / (n * PI));
+    x += radius * sinLUT(n * time + PI / 2);
+    y += radius * sinLUT(n * time);
 
-
-    let x = 0;
-    let y = 0;
-
-    for (let i = 0; i < slider.value(); i++) {
-        let prevx = x;
-        let prevy = y;
-
-        let n = i * 2 + 1; // 1, 3, 5 (tek sayılar)
-        let radius = 50 * (4 / (n * PI)); // Çemberi 50x büyütmek için
-
-        x += radius * sinLUT(n * time + (PI / 2));  // Gerçek LUT
-        y += radius * sinLUT(n * time);  // İmajiner kısım  LUT ile
-
-        stroke(255, 100);
-        noFill();
-        ellipse(prevx, prevy, radius * 2); // Daire çiz
-
-        stroke(255);
-        line(prevx, prevy, x, y); // Çizgiler
-    }
-
-    wave.unshift(y); // wave dizisinin başına ekle
-
-    // wave uzunluğunu sınırla
-    if (wave.length > 250) {
-        wave.pop();
-    }
-
-    translate(200, 0);
-    line(x - 200, y, 0, wave[0]); // Yatay çizgi
-
-    beginShape();
+    stroke(255, 100);
     noFill();
-    for (let i = 0; i < wave.length; i++) {
-        vertex(i, wave[i]); // Dalga şeklini çiz
-    }
-    endShape();
+    ellipse(prevx, prevy, radius * 2);
+    stroke(255);
+    line(prevx, prevy, x, y);
+  }
 
-    time += 0.05; // Zaman, hız
+  wave.unshift(y);
+  if (wave.length > 250) wave.pop();
+
+  translate(200, 0);
+  line(x - 200, y, 0, wave[0]);
+  beginShape();
+  noFill();
+  for (let i = 0; i < wave.length; i++) vertex(i, wave[i]);
+  endShape();
+
+  time += 0.05;
 }
 
 function generateWaveform() {
-    let sampleRate = audioContext.sampleRate;
-    let duration = 0.1;
-    let bufferSize = sampleRate * duration;
-    let buffer = audioContext.createBuffer(1, bufferSize, sampleRate);
+  let sr = audioContext.sampleRate;
+  let duration = 0.1;
+  let buf = audioContext.createBuffer(1, sr * duration, sr);
+  let data = buf.getChannelData(0);
 
-    let data = buffer.getChannelData(0);
-
-    for (let i = 0; i < bufferSize; i++) {
-        let t = i / sampleRate;
-        let theta = 2 * Math.PI * 220 * t;
-
-        for (let j = 0; j < slider.value(); j++) {
-            let odd = j * 2 + 1;
-            data[i] += (odd * sinLUT(odd * theta)) / (odd * Math.PI);
-        }
+  for (let i = 0; i < data.length; i++) {
+    let t = i / sr;
+    let theta = TWO_PI * 220 * t;
+    for (let j = 0; j < slider.value(); j++) {
+      let odd = j * 2 + 1;
+      data[i] += (odd * sinLUT(odd * theta)) / (odd * PI);
     }
-
-    return buffer;
+  }
+  return buf;
 }
 
 function startSound() {
-    if (!isPlaying) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (!isPlaying) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext.resume();
+    gainNode = audioContext.createGain();
+    gainNode.connect(audioContext.destination);
 
+    bufferSource = audioContext.createBufferSource();
+    bufferSource.buffer = generateWaveform();
+    bufferSource.loop = true;
+    bufferSource.connect(gainNode);
+    // Başlangıç sesi için anlık volume
+    gainNode.gain.setValueAtTime(volumeSlider.value(), audioContext.currentTime);
+    bufferSource.start();
 
-        gainNode = audioContext.createGain(); // gain node
-        gainNode.connect(audioContext.destination); //ses kartı
-
-
-        bufferSource = audioContext.createBufferSource();
-        bufferSource.buffer = generateWaveform();
-        bufferSource.loop = true; //sürekli çal
-        bufferSource.connect(gainNode);
-        bufferSource.start();
-
-        isPlaying = true;
-
-        // Volume slider'ı anlık olarak gain değerini ayarlar
-        volumeSlider.input(() => {
-            gainNode.gain.setValueAtTime(volumeSlider.value(), audioContext.currentTime);
-        });
-
-
-        slider.input(() => {
-            bufferSource.stop();
-            bufferSource = audioContext.createBufferSource();
-            bufferSource.buffer = generateWaveform();
-            bufferSource.loop = true;
-            bufferSource.connect(gainNode);
-            bufferSource.start();
-        });
-    }
+    isPlaying = true;
+  }
 }
 
 function stopSound() {
-    if (isPlaying) {
-        bufferSource.stop();
-        isPlaying = false;
-    }
+  if (isPlaying) {
+    bufferSource.stop();
+    isPlaying = false;
+  }
+}
+
+function valueToDbFS(v) {
+  return v === 0 ? '-∞ dBFS' : (20 * Math.log10(v)).toFixed(2) + ' dBFS';
 }
